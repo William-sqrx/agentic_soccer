@@ -38,20 +38,20 @@ Game()= pcase{
 // model to be further modified to be close to reality in future
 Play(i) = if (i == A) {
   pcase{
-    ApassR*4/5: pass.i{t++} -> Play(i)
-    ApassR/5: goal.i{Ascore ++; t++} -> Game()
+    ApassR*4/5: pass.i{t = t + timespeed} -> Play(i)
+    ApassR/5: goal.i{Ascore ++; t = t + timespeed} -> Game()
     1- ApassR: Play(3-i)
   }
 } else if (i == B){
   pcase {
-    BpassR*4/5: pass.i{t++} -> Play(i)
-    BpassR/5: goal.i{Bscore ++; t++} -> Game()
+    BpassR*4/5: pass.i{t = t + timespeed} -> Play(i)
+    BpassR/5: goal.i{Bscore ++; t = t + timespeed} -> Game()
     1-BpassR: Play(3-i)
   }
 } else {
   pcase{
-    [0.5]:contesting{t++} -> Play(A)
-    [0.5]:contesting{t++} -> Play(B)
+    [0.5]:contesting{t = t + timespeed} -> Play(A)
+    [0.5]:contesting{t = t + timespeed} -> Play(B)
   }
 
 };
