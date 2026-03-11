@@ -1,0 +1,50 @@
+// Team A and Team B
+#define A 1;
+#define B 2;
+#define Awin Ascore > Bscore && t > gametime;
+#define gametime 90;
+
+// r refers to pass reliability when the team posesses the ball without opponent's pressure
+// p refers to pressure degree when opposing team possess the ball
+// these values are intended to be the parameter chosen by AI agent
+// either by pulling from extracted data or choosing appropriate value to answer user's question based on predicate
+#define Ar 1;
+#define Ap 1;
+#define Br 1;
+#define Bp 1;
+
+//arbitrary constant multiplier that decides negative effect of opponent's pressure
+var a = 1/5;
+// pass reliability of team A
+var ApassR = Ar- a*Bp;
+// pass reliability of team B
+var BpassR = Br - a*Ap;
+var t = 0;
+
+// 0 means nobody has it, 1 and 2 are team A and B possessing
+var ball:{0..2} = 0;
+var Ascore = 0;
+var Bscore = 0;
+
+Game()= pcase{
+[0.5]:kickoff.(A) -> Play(A)
+[0.5]:kickoff.(B) -> Play(B)
+};
+
+// assuming by 80% of chance that a team can score while possessing the ball
+Play(i) =if(i == A){pcase{
+ApassR*4/5: pass.i{t++} -> Play(i)
+ApassR/5: goal.i{Ascore ++; t++} -> Game()
+1- ApassR: Play(3-i)
+}
+} else {
+pcase{
+BpassR*4/5: pass.i{t++} -> Play(i)
+BpassR/5: goal.i{Bscore ++; t++} -> Game()
+1-BpassR: Play(3-i)
+}
+};
+ 
+
+#assert Game() deadlockfree;
+#assert Game() reaches Awin with pmin;
