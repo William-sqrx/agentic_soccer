@@ -1,0 +1,234 @@
+/*
+ * football_pressure.pcsp
+ * ======================
+ * A parametric PCSP# model for analysing how defensive pressure (aggression)
+ * affects the winning probability in a football match.
+ *
+ * This file is a TEMPLATE.  The AI Agent replaces the #define macros below
+ * with real values (integers 0-100) computed from StatsBomb open-data before
+ * invoking:
+ *     PAT3.Console.exe -pcsp football_pressure.pcsp
+ *
+ * --------------------------------------------------------------------------
+ * SYNTAX NOTES (from PAT 3.5 User Manual)
+ * --------------------------------------------------------------------------
+ *   if (cond) { P } else { Q }   — conditional choice (time may elapse before eval)
+ *   ifa (cond) { P } else { Q }  — ATOMIC conditional choice (eval + first op atomic)
+ *   ifb (cond) { P }             — BLOCKING conditional choice (guard, no else)
+ *   pcase { [prob] : P  default : Q }       — probabilistic choice (explicit probs)
+ *   pcase { weight1 : P  weight2 : Q }      — probabilistic choice (weighted)
+ *   event_name{var = expr;} -> Process      — data operation (update in event prefix)
+ *   #assert P() reaches cond with prob;     — reachability with probability query
+ *
+ * --------------------------------------------------------------------------
+ * MODEL OVERVIEW
+ * --------------------------------------------------------------------------
+ * The match is modelled as a sequence of POSSESSION PHASES.  In each phase
+ * one team holds the ball and attempts to advance play.  The defending team
+ * applies PRESSURE.  A higher pressure_aggression value increases the chance
+ * of winning the ball back but also increases the chance of conceding a
+ * dangerous attack when the press is beaten.
+ *
+ * The match runs for a fixed number of possession phases (abstracting 90 min).
+ * At the end, the team with more goals wins.
+ *
+ * --------------------------------------------------------------------------
+ * HOW THE AI AGENT USES THIS FILE
+ * --------------------------------------------------------------------------
+ * 1. Read team_stats.csv  ->  obtain metrics for Team A and Team B.
+ * 2. Replace the #define values below with the actual integers.
+ * 3. Set PRESSURE_AGGRESSION_A to different values (e.g. 30, 50, 70, 90).
+ * 4. Run PAT for each setting and collect the win probability.
+ * 5. Report which aggression level yields the highest P(Team A wins).
+ * --------------------------------------------------------------------------
+ */
+
+/* ======================================================================== */
+/*  INJECTABLE PARAMETERS  (replaced by AI Agent before verification)       */
+/* ======================================================================== */
+
+/* --- Team A (the team whose aggression we are analysing) --- */
+#define PASS_RELIABILITY_A      82;
+#define PASS_UNDER_PRESSURE_A   70;
+#define SHOT_CONVERSION_A       12;
+#define XG_PER_SHOT_A           11;
+#define BALL_RETENTION_A        90;
+#define PRESSURE_SUCCESS_A      35;
+
+/* --- Team B (the opponent) --- */
+#define PASS_RELIABILITY_B      80;
+#define PASS_UNDER_PRESSURE_B   68;
+#define SHOT_CONVERSION_B       10;
+#define XG_PER_SHOT_B           10;
+#define BALL_RETENTION_B        88;
+#define PRESSURE_SUCCESS_B      33;
+
+/* --- AGGRESSION CONTROL (the knob we turn) --- */
+#define PRESSURE_AGGRESSION_A   50;
+#define PRESSURE_AGGRESSION_B   50;
+
+/* --- Match structure --- */
+#define TOTAL_PHASES 20;
+
+
+/* ======================================================================== */
+/*  GLOBAL STATE                                                             */
+/* ======================================================================== */
+
+var goalsA = 0;
+var goalsB = 0;
+var phase  = 0;
+
+
+/* ======================================================================== */
+/*  DERIVED WEIGHTS                                                          */
+/*  We precompute pcase weights as #define so they are integer constants.     */
+/*  pcase weights: P(branch) = weight / sum_of_weights                       */
+/* ======================================================================== */
+
+/*
+ * When Team B presses Team A:
+ *   press_wins_weight  = AGGRESSION_B * PRESS_SUCCESS_B * (100 - RETENTION_A) / 100
+ *   press_fails_weight = 10000 - press_wins_weight
+ *   (dividing by 100 keeps values in manageable integer range)
+ */
+#define PRESS_B_WINS  PRESSURE_AGGRESSION_B * PRESSURE_SUCCESS_B * (100 - BALL_RETENTION_A) / 100;
+#define PRESS_B_FAILS 10000 - PRESSURE_AGGRESSION_B * PRESSURE_SUCCESS_B * (100 - BALL_RETENTION_A) / 100;
+
+/*
+ * When Team A presses Team B:
+ */
+#define PRESS_A_WINS  PRESSURE_AGGRESSION_A * PRESSURE_SUCCESS_A * (100 - BALL_RETENTION_B) / 100;
+#define PRESS_A_FAILS 10000 - PRESSURE_AGGRESSION_A * PRESSURE_SUCCESS_A * (100 - BALL_RETENTION_B) / 100;
+
+/*
+ * Team A effective passing (blended by opponent's pressure level):
+ *   eff_pass = RELIABILITY * (100 - opp_aggression)/100 + UNDER_PRESSURE * opp_aggression/100
+ */
+#define PASS_A_OK   PASS_RELIABILITY_A * (100 - PRESSURE_AGGRESSION_B) / 100 + PASS_UNDER_PRESSURE_A * PRESSURE_AGGRESSION_B / 100;
+#define PASS_A_FAIL 100 - PASS_RELIABILITY_A * (100 - PRESSURE_AGGRESSION_B) / 100 - PASS_UNDER_PRESSURE_A * PRESSURE_AGGRESSION_B / 100;
+
+#define PASS_B_OK   PASS_RELIABILITY_B * (100 - PRESSURE_AGGRESSION_A) / 100 + PASS_UNDER_PRESSURE_B * PRESSURE_AGGRESSION_A / 100;
+#define PASS_B_FAIL 100 - PASS_RELIABILITY_B * (100 - PRESSURE_AGGRESSION_A) / 100 - PASS_UNDER_PRESSURE_B * PRESSURE_AGGRESSION_A / 100;
+
+/*
+ * Shot conversion with high-press bonus/penalty:
+ *   When opponent presses high and is beaten, attacker gets space -> higher xG.
+ *   bonus = (opp_aggression - 50) * XG / 200   (positive when opp over-presses)
+ */
+#define SHOT_A_GOAL   SHOT_CONVERSION_A + (PRESSURE_AGGRESSION_B - 50) * XG_PER_SHOT_A / 200;
+#define SHOT_A_MISS   100 - SHOT_CONVERSION_A - (PRESSURE_AGGRESSION_B - 50) * XG_PER_SHOT_A / 200;
+
+#define SHOT_B_GOAL   SHOT_CONVERSION_B + (PRESSURE_AGGRESSION_A - 50) * XG_PER_SHOT_B / 200;
+#define SHOT_B_MISS   100 - SHOT_CONVERSION_B - (PRESSURE_AGGRESSION_A - 50) * XG_PER_SHOT_B / 200;
+
+
+/* ======================================================================== */
+/*  PROPOSITIONS for assertions                                              */
+/* ======================================================================== */
+
+#define TeamAWins  goalsA > goalsB && phase >= TOTAL_PHASES;
+#define TeamBWins  goalsB > goalsA && phase >= TOTAL_PHASES;
+#define Draw       goalsA == goalsB && phase >= TOTAL_PHASES;
+
+
+/* ======================================================================== */
+/*  PROCESSES                                                                */
+/* ======================================================================== */
+
+/*
+ * Match: runs possession phases, alternating which team starts with the ball.
+ * Uses if (not ifa) for standard conditional branching on phase counter.
+ * Variable updates occur inside event prefixes: event_name{stmts} -> Process
+ */
+Match() = if (phase < TOTAL_PHASES) {
+    if (phase % 2 == 0) {
+        next_phase{phase++;} -> TeamAHasBall()
+    } else {
+        next_phase{phase++;} -> TeamBHasBall()
+    }
+} else {
+    Result()
+};
+
+
+/* ---------------------------------------------------------------------- */
+/*  Team A has the ball; Team B is pressing with PRESSURE_AGGRESSION_B    */
+/* ---------------------------------------------------------------------- */
+
+/*
+ * Step 1: Does Team B's press win the ball?
+ * pcase with weighted format: P(press wins) = PRESS_B_WINS / (PRESS_B_WINS + PRESS_B_FAILS)
+ */
+TeamAHasBall() = pcase {
+    PRESS_B_WINS  : turnover_b -> TeamBHasBall()
+    PRESS_B_FAILS : TeamAAdvances()
+};
+
+/*
+ * Step 2: Team A attempts to build an attack through passing.
+ */
+TeamAAdvances() = pcase {
+    PASS_A_OK   : TeamAShot()
+    PASS_A_FAIL : pass_fail_a -> TeamBHasBall()
+};
+
+/*
+ * Step 3: Team A has a shooting opportunity.
+ */
+TeamAShot() = pcase {
+    SHOT_A_GOAL : goal_a{goalsA++;} -> Match()
+    SHOT_A_MISS : no_goal_a -> Match()
+};
+
+
+/* ---------------------------------------------------------------------- */
+/*  Team B has the ball; Team A is pressing with PRESSURE_AGGRESSION_A    */
+/* ---------------------------------------------------------------------- */
+
+TeamBHasBall() = pcase {
+    PRESS_A_WINS  : turnover_a -> TeamAHasBall()
+    PRESS_A_FAILS : TeamBAdvances()
+};
+
+TeamBAdvances() = pcase {
+    PASS_B_OK   : TeamBShot()
+    PASS_B_FAIL : pass_fail_b -> TeamAHasBall()
+};
+
+TeamBShot() = pcase {
+    SHOT_B_GOAL : goal_b{goalsB++;} -> Match()
+    SHOT_B_MISS : no_goal_b -> Match()
+};
+
+
+/* ---------------------------------------------------------------------- */
+/*  Result: the match is over, emit a single terminal event                */
+/* ---------------------------------------------------------------------- */
+
+Result() = if (goalsA > goalsB) {
+    team_a_wins -> Skip
+} else {
+    if (goalsB > goalsA) {
+        team_b_wins -> Skip
+    } else {
+        draw -> Skip
+    }
+};
+
+
+/* ======================================================================== */
+/*  ASSERTIONS                                                               */
+/* ======================================================================== */
+
+/*
+ * PAT returns min/max probability for each reachability query.
+ * The AI Agent parses these from PAT's stdout.
+ *
+ * "with prob" asks for both min and max probability.
+ * "with pmin" / "with pmax" asks for only one bound.
+ */
+
+#assert Match() reaches TeamAWins with prob;
+#assert Match() reaches TeamBWins with prob;
+#assert Match() reaches Draw with prob;
