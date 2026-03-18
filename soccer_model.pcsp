@@ -5,7 +5,7 @@
 #define gametime 90;
 
 // Ar refers to pass reliability of team A when the team posesses the ball without B's pressure
-// Ap refers to pressure degree when team B possesses the ball
+// Ap refers to the genearal aggressive pressure degree A makes when opponent possesses the ball
 // vice versa for Br and Bp
 // these values are intended to be the parameter chosen by AI agent
 // either by pulling from extracted data prepared or choosing appropriate value to answer user's question based on predicate
@@ -17,10 +17,11 @@
 
 //arbitrary constant multiplier that decides negative effect of opponent's pressure
 var a = 1/5;
-// pass reliability of team A
+// effective pass reliability in game of team A under pressure from team B
 var ApassR = Ar- a*Bp;
-// pass reliability of team B
+// Likewise of team B
 var BpassR = Br - a*Ap;
+// game time, 90 minutes max
 var t = 0;
 
 // 0 means nobody has it, 1 and 2 are team A and B possessing respectively
