@@ -37,7 +37,10 @@ Game()= pcase{
 
 // assuming by 20% of chance that a team can score while possessing the ball
 // model to be further modified to be close to reality in future
-Play(i) = if (i == A) {
+Play(i) = if (t > 90) {
+  Stop
+}
+else if (i == A) {
   pcase{
     ApassR*4/5: pass.i{t = t + timespeed} -> Play(i)
     ApassR/5: goal.i{Ascore ++; t = t + timespeed; } -> Play(3-i)
