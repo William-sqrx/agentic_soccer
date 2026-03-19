@@ -34,8 +34,8 @@ agentic-soccer/
 │                                      #   and how it maps to a #define macro in the PCSP file
 │
 ├── scripts/                           # Offline data processing (run once, or periodically)
-│   ├── extract_team_stats.py          # Reads StatsBomb JSON → computes metrics → writes CSV
-│   └── validate_stats.py             # (Optional) sanity-checks the computed CSV values
+│   └── extract_team_stats.py          # Reads StatsBomb JSON → computes metrics → writes CSV
+│
 │
 └─── data/                              # All data assets
       ├── open-data/                     # Full clone of https://github.com/statsbomb/open-data
