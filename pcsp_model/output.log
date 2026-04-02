@@ -1,0 +1,60 @@
+=======================================================
+Assertion: Match() reaches TeamAWins with prob
+********Verification Result********
+The Assertion (Match() reaches TeamAWins with prob) is Valid with Probability [0.44247, 0.44247];
+
+********Verification Setting********
+Admissible Behavior: All
+Search Engine: Graph-based Probability Computation Based on Value Iteration
+System Abstraction: False
+Maximum difference threshold : 1E-06
+
+
+********Verification Statistics********
+Visited States:25616
+Total Transitions:34025
+MDP Iterations:1371890
+Time Used:0.3132948s
+Estimated Memory Used:70016.16KB
+
+
+=======================================================
+Assertion: Match() reaches TeamBWins with prob
+********Verification Result********
+The Assertion (Match() reaches TeamBWins with prob) is Valid with Probability [0.29715, 0.29715];
+
+********Verification Setting********
+Admissible Behavior: All
+Search Engine: Graph-based Probability Computation Based on Value Iteration
+System Abstraction: False
+Maximum difference threshold : 1E-06
+
+
+********Verification Statistics********
+Visited States:25506
+Total Transitions:33915
+MDP Iterations:1384566
+Time Used:0.2926915s
+Estimated Memory Used:66043.496KB
+
+
+=======================================================
+Assertion: Match() reaches Draw with prob
+********Verification Result********
+The Assertion (Match() reaches Draw with prob) is Valid with Probability [0.31483, 0.31483];
+
+********Verification Setting********
+Admissible Behavior: All
+Search Engine: Graph-based Probability Computation Based on Value Iteration
+System Abstraction: False
+Maximum difference threshold : 1E-06
+
+
+********Verification Statistics********
+Visited States:27270
+Total Transitions:36210
+MDP Iterations:1249748
+Time Used:0.2789502s
+Estimated Memory Used:70593.608KB
+
+
