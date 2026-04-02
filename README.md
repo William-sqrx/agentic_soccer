@@ -73,3 +73,11 @@ Start the frontend
 cd graph/soccer-chat
 npm run start
 ```
+
+in powershell, run
+
+- assuming pat is alias for `PAT3.Console.exe`
+
+```powershell
+pat -pcsp "$(Join-Path $PWD './model/football_pressure.pcsp')" "$(Join-Path $PWD './model/output.log')"
+```
