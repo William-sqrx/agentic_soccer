@@ -49,7 +49,7 @@ The system has four layers:
 2. Flask receives the message, passes it to the LangGraph agent.
 3. Agent decides it needs team data → calls `lookup_team_stats("Barcelona")` and `lookup_team_stats("Liverpool")` which read from the precomputed CSV in `data/processed/team_stats.csv`.
 4. Agent decides to run a sensitivity sweep → calls `run_pat_analysis(...)` multiple times (e.g., pressure aggression = 20, 40, 50, 60, 70, 80), each time passing the team parameters plus the pressure value as macro substitution arguments.
-5. PAT wrapper substitutes the `#define` lines in `model/football_pressure.pcsp`, runs `PAT3.Console.exe -pcsp`, parses the output probabilities.
+5. PAT wrapper substitutes the `#define` lines in `pcsp_model/football_pressure.pcsp`, runs `PAT3.Console.exe -pcsp`, parses the output probabilities.
 6. Agent receives the results (e.g., `{aggression: 70, p_win: 0.42, p_draw: 0.22, p_loss: 0.36}`), compares across runs, and composes a natural-language answer with the optimal aggression level and the reasoning.
 7. Flask streams the answer back to the frontend.
 
@@ -80,7 +80,10 @@ agentic-soccer/
 │   ├── pat_runner.py                  # PAT wrapper: macro substitution + CLI execution + output parsing
 │   └── team_lookup.py                 # Reads team_stats.csv to return a team's metrics as a dict
 │
-├── model/                             # PCSP# model and its documentation
+├── model/                             # Python domain models
+│   └── team.py                        # Team class for abstraction over team stats
+│
+├── pcsp_model/                        # PCSP# model and its documentation
 │   ├── football_pressure.pcsp         # Parametric PCSP# template (agent edits #define lines)
 │   └── MODEL_SPEC.md                  # Documents every variable: what it means, which StatsBomb
 │                                      #   event type and attributes it is derived from, the formula,
@@ -113,7 +116,8 @@ agentic-soccer/
 
 - **`scripts/`** is for offline batch processing. Run `python scripts/extract_team_stats.py --repo_path data/open-data --output data/processed/team_stats.csv` once (or whenever new matches are added to open-data). The agent never runs these scripts at query time — it reads the precomputed CSV.
 - **`tools/`** contains the agent-callable tools. These are thin wrappers: `pat_runner.py` does macro substitution and subprocess invocation; `team_lookup.py` does a CSV lookup.
-- **`model/`** holds the PCSP# template and its specification document. `MODEL_SPEC.md` is the authoritative reference for what each `#define` macro means, how it is calculated, and which StatsBomb event types feed into it. If you change the model, update `MODEL_SPEC.md` in the same commit.
+- **`model/`** holds Python domain models. `team.py` contains the `Team` class for abstracting over team statistics.
+- **`pcsp_model/`** holds the PCSP# template and its specification document. `MODEL_SPEC.md` is the authoritative reference for what each `#define` macro means, how it is calculated, and which StatsBomb event types feed into it. If you change the model, update `MODEL_SPEC.md` in the same commit.
 - **`data/processed/`** stores the CSV output. The format is CSV with columns: `team, pass_reliability, pass_under_pressure, pressure_success_rate, shot_conversion, xg_per_shot, ball_retention, matches_analysed, total_passes, total_shots, total_pressures`. All metric columns are integers 0–100.
 
 ---
@@ -177,4 +181,4 @@ The online version of the PAT manual is at `https://formal-analysis.com/sem-eng/
 - **Keep `TOTAL_PHASES` at 20** during development for fast iteration. Increase to 30–40 for final evaluation runs only.
 - **Test the PCSP model in PAT GUI first** before automating with CLI. Load `football_pressure.pcsp` in PAT, click Verify, and confirm the assertions produce sensible probabilities.
 - **The Python wrapper uses regex substitution** on `#define` lines. The pattern is `#define MACRO_NAME <value>;`. When the agent writes the file for execution, all macro values must be resolved to **concrete integers** — no expressions. The template file itself may contain expressions for human readability, but `pat_runner.py` overwrites them with integers before invoking PAT.
-- **Commit `model/MODEL_SPEC.md` alongside any PCSP model changes.** The spec doc is the single source of truth for what each macro means, which StatsBomb event type feeds it, and the exact formula.
+- **Commit `pcsp_model/MODEL_SPEC.md` alongside any PCSP model changes.** The spec doc is the single source of truth for what each macro means, which StatsBomb event type feeds it, and the exact formula.
