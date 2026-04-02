@@ -126,8 +126,46 @@ Where `PRESS_B_WINS = AGGRESSION_B × PRESS_SUCCESS_B × (100 − RETENTION_A) /
 **Passing under pressure:**
 Effective pass rate is a weighted blend of `PASS_RELIABILITY` (no pressure) and `PASS_UNDER_PRESSURE` (full pressure), with blending weight = `PRESSURE_AGGRESSION`.
 
-**Shot conversion with high-press bonus:**
-When the opponent presses high and the press is beaten, the attacking team gets space behind the defensive line. The model adds a bonus: `(AGGRESSION − 50) × XG / 200`. Over-pressing (>50) gives the opponent better chances when they beat the press.
+**Shot conversion (Finishing Skill Multiplier model):**
+
+Historically, the team faces chances of average quality `XG_PER_SHOT` and converts at rate `SHOT_CONVERSION`. These two values define a known data point. We can think of `SHOT_CONVERSION` as the output of a function that takes `XG_PER_SHOT` as input — it tells us "this team converts at this rate given this average chance quality."
+
+The ratio `SHOT_CONVERSION / XG_PER_SHOT` is the team's **finishing skill multiplier**: >1 means clinical (converts better than xG predicts), <1 means wasteful. We model conversion as a linear function of chance quality: `f(xg) = (CONVERSION / XG) × xg`.
+
+When the opponent's press is beaten, the effective quality of the chance changes because there is more or less space behind the defensive line:
+
+```
+XG_EFFECTIVE = XG_PER_SHOT + (opp_aggression − 50) × SPACE_BONUS_K / 100
+```
+
+We feed this adjusted quality into the finishing skill function to predict the conversion rate for this particular chance:
+
+```
+SHOT_GOAL = CONVERSION × XG_EFFECTIVE / XG_PER_SHOT
+          = CONVERSION × (XG×100 + (agg−50)×K) / (XG×100)
+```
+
+Key properties of this formula:
+
+| Condition | Effect | Correct? |
+|-----------|--------|----------|
+| `SHOT_CONVERSION` increases | `SHOT_GOAL` increases proportionally | ✓ Clinical teams score more |
+| `XG_PER_SHOT` increases | `SHOT_GOAL` increases (via numerator) | ✓ Better chance creators score more |
+| Opponent aggression > 50 | `SHOT_GOAL` > `SHOT_CONVERSION` | ✓ Beating a high press yields space |
+| Opponent aggression = 50 | `SHOT_GOAL` = `SHOT_CONVERSION` exactly | ✓ Base case preserved |
+| Opponent aggression < 50 | `SHOT_GOAL` < `SHOT_CONVERSION` | ✓ Deep block harder to score against |
+| Higher finishing skill ratio | Amplifies the bonus from beating press | ✓ Clinical teams exploit space more |
+
+`SPACE_BONUS_K` (default 10) controls sensitivity. With K=10 and aggression=100, the bonus is +5 xG units. `XG_PER_SHOT` must be ≥ 1 (Python wrapper must clamp) to avoid division by zero.
+
+Worked example (CONVERSION=12, XG=11, K=10):
+
+| Opp Aggression | XG_EFFECTIVE | SHOT_GOAL | SHOT_MISS |
+|---------------:|-------------:|----------:|----------:|
+| 20 | 8 | 8 | 92 |
+| 50 | 11 | 12 | 88 |
+| 70 | 13 | 14 | 86 |
+| 90 | 15 | 16 | 84 |
 
 ### 5.3 Variable Updates
 

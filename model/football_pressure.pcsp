@@ -70,6 +70,11 @@
 /* --- Match structure --- */
 #define TOTAL_PHASES 20;
 
+/* --- Tunable constant: how much opponent aggression affects chance quality --- */
+/* K=10 means at max aggression (100), the xG bonus is +50*10/100 = +5 units    */
+/* See MODEL_SPEC.md Section 5.3 for derivation and justification               */
+#define SPACE_BONUS_K 10;
+
 
 /* ======================================================================== */
 /*  GLOBAL STATE                                                             */
@@ -112,15 +117,30 @@ var phase  = 0;
 #define PASS_B_FAIL 100 - PASS_RELIABILITY_B * (100 - PRESSURE_AGGRESSION_A) / 100 - PASS_UNDER_PRESSURE_B * PRESSURE_AGGRESSION_A / 100;
 
 /*
- * Shot conversion with high-press bonus/penalty:
- *   When opponent presses high and is beaten, attacker gets space -> higher xG.
- *   bonus = (opp_aggression - 50) * XG / 200   (positive when opp over-presses)
+ * Shot conversion (Finishing Skill Multiplier model):
+ *   We model f(xg) = (CONVERSION / XG) * xg — a linear map from chance
+ *   quality to conversion rate. The ratio CONVERSION/XG is the team's
+ *   "finishing skill multiplier" (>1 = clinical, <1 = wasteful).
+ *
+ *   When opponent's press is beaten, effective chance quality changes:
+ *     XG_EFFECTIVE = XG + (opp_aggression - 50) * K / 100
+ *
+ *   Predicted conversion = CONVERSION * XG_EFFECTIVE / XG
+ *     = CONVERSION * (XG*100 + (agg-50)*K) / (XG*100)
+ *
+ *   Properties:
+ *     - At opp_aggression=50: result = CONVERSION exactly (base case)
+ *     - Higher opp aggression -> more space -> higher conversion
+ *     - Higher CONVERSION always helps; higher XG always helps
+ *
+ *   NOTE: XG_PER_SHOT must be >= 1. Python wrapper must clamp before substitution.
+ *   See MODEL_SPEC.md Section 5.3 for full derivation.
  */
-#define SHOT_A_GOAL   SHOT_CONVERSION_A + (PRESSURE_AGGRESSION_B - 50) * XG_PER_SHOT_A / 200;
-#define SHOT_A_MISS   100 - SHOT_CONVERSION_A - (PRESSURE_AGGRESSION_B - 50) * XG_PER_SHOT_A / 200;
+#define SHOT_A_GOAL  SHOT_CONVERSION_A * (XG_PER_SHOT_A * 100 + (PRESSURE_AGGRESSION_B - 50) * SPACE_BONUS_K) / (XG_PER_SHOT_A * 100);
+#define SHOT_A_MISS  100 - SHOT_CONVERSION_A * (XG_PER_SHOT_A * 100 + (PRESSURE_AGGRESSION_B - 50) * SPACE_BONUS_K) / (XG_PER_SHOT_A * 100);
 
-#define SHOT_B_GOAL   SHOT_CONVERSION_B + (PRESSURE_AGGRESSION_A - 50) * XG_PER_SHOT_B / 200;
-#define SHOT_B_MISS   100 - SHOT_CONVERSION_B - (PRESSURE_AGGRESSION_A - 50) * XG_PER_SHOT_B / 200;
+#define SHOT_B_GOAL  SHOT_CONVERSION_B * (XG_PER_SHOT_B * 100 + (PRESSURE_AGGRESSION_A - 50) * SPACE_BONUS_K) / (XG_PER_SHOT_B * 100);
+#define SHOT_B_MISS  100 - SHOT_CONVERSION_B * (XG_PER_SHOT_B * 100 + (PRESSURE_AGGRESSION_A - 50) * SPACE_BONUS_K) / (XG_PER_SHOT_B * 100);
 
 
 /* ======================================================================== */
