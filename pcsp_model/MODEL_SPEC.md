@@ -2,17 +2,17 @@
 
 ## 3. Relevant Variables and Their Football Meaning
 
-The model captures six key metrics per team, plus one **control variable** (pressure aggression) that the agent varies during sensitivity analysis.
+The model captures six key metrics per team, plus one **data-grounded variable** (pressure aggression) that also serves as the control variable during sensitivity analysis.
 
-| #     | Variable                | PCSP Macro Name         | Range | Football Meaning                                                                                                                    |
-| ----- | ----------------------- | ----------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | Pass Reliability        | `PASS_RELIABILITY_X`    | 0–100 | Percentage of attempted passes completed successfully.                                                                              |
-| 2     | Pass Under Pressure     | `PASS_UNDER_PRESSURE_X` | 0–100 | Percentage of passes completed when the passer was flagged as `under_pressure`. Captures how well a team copes when pressed.        |
-| 3     | Pressure Success Rate   | `PRESSURE_SUCCESS_X`    | 0–100 | Ratio of (interceptions + ball recoveries) to total pressure events applied. Approximates how often pressing wins the ball back.    |
-| 4     | Shot Conversion         | `SHOT_CONVERSION_X`     | 0–100 | Goals scored from open play divided by total shots.                                                                                 |
-| 5     | xG per Shot             | `XG_PER_SHOT_X`         | 0–100 | Average StatsBomb expected goals per shot, multiplied by 100 (e.g., 0.11 → 11). Measures quality of chances created.                |
-| 6     | Ball Retention          | `BALL_RETENTION_X`      | 0–100 | 1 minus the loss rate, where losses = dispossessions + miscontrols. A high value means the team rarely gives the ball away cheaply. |
-| **C** | **Pressure Aggression** | `PRESSURE_AGGRESSION_X` | 0–100 | **The control knob.** How aggressively Team X presses when the opponent has the ball. The AI Agent varies this to find the optimum. |
+| #   | Variable              | PCSP Macro Name         | Range | Football Meaning                                                                                                                                                                                                                                                |
+| --- | --------------------- | ----------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Pass Reliability      | `PASS_RELIABILITY_X`    | 0–100 | Percentage of attempted passes completed successfully.                                                                                                                                                                                                          |
+| 2   | Pass Under Pressure   | `PASS_UNDER_PRESSURE_X` | 0–100 | Percentage of passes completed when the passer was flagged as `under_pressure`. Captures how well a team copes when pressed.                                                                                                                                    |
+| 3   | Pressure Success Rate | `PRESSURE_SUCCESS_X`    | 0–100 | Ratio of (interceptions + ball recoveries) to total pressure events applied. Approximates how often pressing wins the ball back.                                                                                                                                |
+| 4   | Shot Conversion       | `SHOT_CONVERSION_X`     | 0–100 | Goals scored from open play divided by total shots.                                                                                                                                                                                                             |
+| 5   | xG per Shot           | `XG_PER_SHOT_X`         | 0–100 | Average StatsBomb expected goals per shot, multiplied by 100 (e.g., 0.11 → 11). Measures quality of chances created.                                                                                                                                            |
+| 6   | Ball Retention        | `BALL_RETENTION_X`      | 0–100 | 1 minus the loss rate, where losses = dispossessions + miscontrols. A high value means the team rarely gives the ball away cheaply.                                                                                                                             |
+| 7   | Pressure Aggression   | `PRESSURE_AGGRESSION_X` | 0–100 | How aggressively the team presses when the opponent has the ball. Computed from data (see 4.7). Also serves as the **control variable** — the AI Agent uses each team's historical value as the default, and sweeps Team A's value during sensitivity analysis. |
 
 > `X` is replaced by `A` or `B` for each team.
 
@@ -71,6 +71,37 @@ Losses:          count(type.name == "Dispossessed") + count(type.name == "Miscon
 Touches proxy:   count(type.name == "Ball Receipt*") + count(type.name == "Pass")
 Formula:         ball_retention = (1 - losses / touches_proxy) × 100
 ```
+
+### 4.7 Pressure Aggression
+
+This variable captures how aggressively a team presses when the opponent has the ball. It is derived from two complementary signals:
+
+**Signal 1 — Pressing frequency:** How often the team applies pressure relative to the opponent's time on the ball. Computed as `total_pressures / opponent_total_passes × 100`, capped at 100. A team that pressures on 40% of opponent passes is more aggressive than one at 20%.
+
+**Signal 2 — Pressing height:** Where on the pitch the pressures occur. StatsBomb `Pressure` events have a `location` field where `location[0]` is the x-coordinate (0 = own goal line, 120 = opponent goal line). We compute `avg_pressure_x / 120 × 100` to normalise to 0–100. A team pressing at average x=80 (opponent's third) scores ~67; a team pressing at x=40 (own half) scores ~33.
+
+**Combined formula:**
+
+```
+pressure_aggression = (pressing_frequency + pressing_height) / 2
+```
+
+Equal weight is given to both signals. A team that presses both frequently AND high up the pitch scores near 100. A team that presses rarely AND deep scores near 0.
+
+```
+Source events:       type.name == "Pressure" (for the pressing team)
+                     type.name == "Pass" (for the opponent, to compute opponent_total_passes)
+Location field:      location[0] on Pressure events (x-coordinate, 0–120)
+Pressing frequency:  min(100, total_pressures / opponent_total_passes × 100)
+Pressing height:     avg(location[0] across all Pressure events) / 120 × 100
+Formula:             pressure_aggression = (pressing_frequency + pressing_height) / 2
+```
+
+**Why this matters for the model:**
+
+- The agent uses each team's historical `pressure_aggression` as the **default** value for `PRESSURE_AGGRESSION_X` in the PCSP model.
+- When the user asks "should Team A be more aggressive?", the agent keeps `PRESSURE_AGGRESSION_B` at Team B's historical value and sweeps `PRESSURE_AGGRESSION_A` across a range.
+- The historical value also enables **validation**: we can run the model with both teams' historical aggression values and compare the predicted win probability against actual match outcomes.
 
 ---
 
@@ -147,25 +178,25 @@ SHOT_GOAL = CONVERSION × XG_EFFECTIVE / XG_PER_SHOT
 
 Key properties of this formula:
 
-| Condition | Effect | Correct? |
-|-----------|--------|----------|
-| `SHOT_CONVERSION` increases | `SHOT_GOAL` increases proportionally | ✓ Clinical teams score more |
-| `XG_PER_SHOT` increases | `SHOT_GOAL` increases (via numerator) | ✓ Better chance creators score more |
-| Opponent aggression > 50 | `SHOT_GOAL` > `SHOT_CONVERSION` | ✓ Beating a high press yields space |
-| Opponent aggression = 50 | `SHOT_GOAL` = `SHOT_CONVERSION` exactly | ✓ Base case preserved |
-| Opponent aggression < 50 | `SHOT_GOAL` < `SHOT_CONVERSION` | ✓ Deep block harder to score against |
-| Higher finishing skill ratio | Amplifies the bonus from beating press | ✓ Clinical teams exploit space more |
+| Condition                    | Effect                                  | Correct?                             |
+| ---------------------------- | --------------------------------------- | ------------------------------------ |
+| `SHOT_CONVERSION` increases  | `SHOT_GOAL` increases proportionally    | ✓ Clinical teams score more          |
+| `XG_PER_SHOT` increases      | `SHOT_GOAL` increases (via numerator)   | ✓ Better chance creators score more  |
+| Opponent aggression > 50     | `SHOT_GOAL` > `SHOT_CONVERSION`         | ✓ Beating a high press yields space  |
+| Opponent aggression = 50     | `SHOT_GOAL` = `SHOT_CONVERSION` exactly | ✓ Base case preserved                |
+| Opponent aggression < 50     | `SHOT_GOAL` < `SHOT_CONVERSION`         | ✓ Deep block harder to score against |
+| Higher finishing skill ratio | Amplifies the bonus from beating press  | ✓ Clinical teams exploit space more  |
 
 `SPACE_BONUS_K` (default 10) controls sensitivity. With K=10 and aggression=100, the bonus is +5 xG units. `XG_PER_SHOT` must be ≥ 1 (Python wrapper must clamp) to avoid division by zero.
 
 Worked example (CONVERSION=12, XG=11, K=10):
 
 | Opp Aggression | XG_EFFECTIVE | SHOT_GOAL | SHOT_MISS |
-|---------------:|-------------:|----------:|----------:|
-| 20 | 8 | 8 | 92 |
-| 50 | 11 | 12 | 88 |
-| 70 | 13 | 14 | 86 |
-| 90 | 15 | 16 | 84 |
+| -------------: | -----------: | --------: | --------: |
+|             20 |            8 |         8 |        92 |
+|             50 |           11 |        12 |        88 |
+|             70 |           13 |        14 |        86 |
+|             90 |           15 |        16 |        84 |
 
 ### 5.3 Variable Updates
 
@@ -203,63 +234,28 @@ next_phase{phase++;} -> TeamAHasBall()
 2. **Prepare** the PCSP template — for each aggression level (e.g., 20, 30, 40, 50, 60, 70, 80, 90):
    - Replace all `#define` macros for Team A (Barcelona) and Team B (Liverpool).
    - Set `PRESSURE_AGGRESSION_A` to the current test value.
-   - Keep `PRESSURE_AGGRESSION_B` at Liverpool's natural aggression (from data, or sweep it too).
+   - There will be multiple test values (the more the better)
+   - Test value will include the team A's historical `pressure_aggression` from the CSV, and will have differing values around it
+   - PAT will be run multiple times so that the AI finds the `pressure_aggression` that yields local maximum
+   - Set `PRESSURE_AGGRESSION_B` to Liverpool's historical `pressure_aggression` from the CSV.
 
-3. **Execute** PAT for each file:
+3. **Execute** PAT for each file via tool call provided by backend server
 
-   ```
-   PAT3.Console.exe -pcsp football_pressure.pcsp
-   ```
+- the tool will execute
 
-4. **Parse** PAT output — extract the probability from lines like:
-
-   ```
-   The Assertion (Match() reaches TeamAWins with prob) is Valid.
-   Min probability = 0.312; Max probability = 0.428
-   ```
-
-5. **Synthesise** results into a table and recommendation.
-
-### 6.3 Macro Editing (Pseudocode for the Agent)
-
-```python
-import re, subprocess
-
-def run_analysis(team_a_stats, team_b_stats, aggression_level, pcsp_template_path):
-    with open(pcsp_template_path, 'r') as f:
-        code = f.read()
-
-    replacements = {
-        'PASS_RELIABILITY_A':     team_a_stats['pass_reliability'],
-        'PASS_UNDER_PRESSURE_A':  team_a_stats['pass_under_pressure'],
-        'SHOT_CONVERSION_A':      team_a_stats['shot_conversion'],
-        'XG_PER_SHOT_A':          team_a_stats['xg_per_shot'],
-        'BALL_RETENTION_A':       team_a_stats['ball_retention'],
-        'PRESSURE_SUCCESS_A':     team_a_stats['pressure_success_rate'],
-        'PASS_RELIABILITY_B':     team_b_stats['pass_reliability'],
-        'PASS_UNDER_PRESSURE_B':  team_b_stats['pass_under_pressure'],
-        'SHOT_CONVERSION_B':      team_b_stats['shot_conversion'],
-        'XG_PER_SHOT_B':          team_b_stats['xg_per_shot'],
-        'BALL_RETENTION_B':       team_b_stats['ball_retention'],
-        'PRESSURE_SUCCESS_B':     team_b_stats['pressure_success_rate'],
-        'PRESSURE_AGGRESSION_A':  aggression_level,
-        'PRESSURE_AGGRESSION_B':  team_b_stats.get('default_aggression', 50),
-    }
-
-    for macro, value in replacements.items():
-        pattern = rf'(#define\s+{macro}\s+)\d+;'
-        code = re.sub(pattern, rf'\g<1>{value};', code)
-
-    out_path = 'matchup.pcsp'
-    with open(out_path, 'w') as f:
-        f.write(code)
-
-    result = subprocess.run(
-        ['PAT3.Console.exe', '-pcsp', out_path],
-        capture_output=True, text=True
-    )
-    return parse_pat_output(result.stdout)
 ```
+PAT3.Console.exe -pcsp football_pressure.pcsp output.log
+```
+
+- and extract the probability from lines like from `output.log`:
+  - or deliver the entire log back to Agent (up to implementation)
+
+```
+The Assertion (Match() reaches TeamAWins with prob) is Valid.
+Min probability = 0.312; Max probability = 0.428
+```
+
+1. **Synthesise** results into a table and recommendation.
 
 ---
 
