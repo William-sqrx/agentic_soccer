@@ -56,14 +56,21 @@ agentic-soccer/
 
 ```
 
-## How to Run
+## How to Run Locally
 
-Put the required environment variables in .env
+- If the `data/processed/team_stats.csv` is not present
+  - in project root directory, run
+  - `python .\scripts\extract_team_stats.py --repo_path .\data\open-data\ --output .\data\processed\[team_stat_v1].csv`
+    - don't delete previous processed data via naming versions as in `team_stat_v1`
 
-Start the backend
+- Put the required environment variables in `graph/.env`
+  - `.env.sample` as reference
+
+- Start the backend (you might want to use venv for package installation)
 
 ```bash
 cd graph
+pip install -r requirements.txt
 python3 main.py
 ```
 
@@ -74,9 +81,11 @@ cd graph/soccer-chat
 npm run start
 ```
 
-in powershell, run
+## Notes on running pat locally in Windows
 
-- assuming pat is alias for `PAT3.Console.exe`
+- In Powershell, run
+  - assuming `pat` is alias for `PAT3.Console.exe`
+  - PAT3 cli currently does not know how to handle relative path
 
 ```powershell
 pat -pcsp "$(Join-Path $PWD './model/football_pressure.pcsp')" "$(Join-Path $PWD './model/output.log')"
