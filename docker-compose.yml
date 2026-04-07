@@ -1,0 +1,70 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Agentic Soccer Coach – docker-compose
+#
+# Directory mapping (rename before running):
+#   graph/           → backend/
+#   graph/soccer-chat/ → frontend/
+#
+# Usage:
+#   docker compose up --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    build:
+      context: ./redisserver
+    container_name: agentic_soccer_redis
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}   # set in .env or leave blank for no auth
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend (Flask + LangGraph) ────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend          # rename graph/ → backend/ before running
+    container_name: agentic_soccer_backend
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      # If REDIS_PASSWORD is set, the URL needs it; otherwise use the plain form.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount shared project directories so the agent can access them at runtime
+      - ./tools:/app/tools:ro
+      - ./model:/app/model:ro
+      - ./pcsp_model:/app/pcsp_model:ro
+      - ./data/processed:/app/data/processed:ro
+
+  # ── Frontend (React → nginx) ───────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend         # rename graph/soccer-chat/ → frontend/ before running
+      args:
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8000}
+    container_name: agentic_soccer_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  redis_data:
