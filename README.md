@@ -12,16 +12,23 @@ agentic-soccer/
 ├── requirements.txt                   # Python dependencies
 ├── docs/                              # documentations
 │   └── help.pdf                       # PAT 3.5 User Manual (CSP#/PCSP# reference)
-├── graph/                             # Flask backend + LangGraph agent
+├── backend/                           # Flask backend + LangGraph agent
 │   ├── app.py                         # Flask application, routes (/chat, /teams, etc.)
 │   ├── graph.py                       # LangGraph agent definition, tool bindings
 │   ├── main.py                        # Entry point (python main.py to start server)
 │   ├── state.py                       # LangGraph state schema
-│   └── soccer-chat/                   # Frontend client (React)
-│       ├── public/
-│       ├── src/
-│       ├── package.json
-│       └── ...
+│   └── Dockerfile
+│
+├── frontend/                          # Frontend client (React → nginx)
+│   ├── src/
+│   ├── package.json
+│   ├── nginx.conf
+│   ├── Dockerfile
+│   └── ...
+│
+├── redisserver/                       # Redis instance
+│   ├── Dockerfile
+│   └── entrypoint.sh
 │
 ├── tools/                             # Python tool implementations called by the agent
 │   ├── pat_runner.py                  # PAT wrapper: macro substitution + CLI execution + output parsing
@@ -63,13 +70,13 @@ agentic-soccer/
   - `python .\scripts\extract_team_stats.py --repo_path .\data\open-data\ --output .\data\processed\[team_stat_v1].csv`
     - don't delete previous processed data via naming versions as in `team_stat_v1`
 
-- Put the required environment variables in `graph/.env`
+- Put the required environment variables in `backend/.env`
   - `.env.sample` as reference
 
 - Start the backend (you might want to use venv for package installation)
 
 ```bash
-cd graph
+cd backend
 pip install -r requirements.txt
 python3 main.py
 ```
@@ -77,7 +84,7 @@ python3 main.py
 Start the frontend
 
 ```bash
-cd graph/soccer-chat
+cd frontend
 npm run start
 ```
 

@@ -14,18 +14,18 @@ The system has four layers:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  Frontend  (React / soccer-chat)                    │
+│  Frontend  (React / frontend)                       │
 │  User types: "Should Barça press Liverpool harder?" │
 └──────────────────────┬──────────────────────────────┘
                        │  HTTP (REST / SSE)
 ┌──────────────────────▼──────────────────────────────┐
-│  Flask Backend  (graph/app.py)                      │
+│  Flask Backend  (backend/app.py)                    │
 │  Routes: /chat, /teams, /analysis                   │
 │  Hosts the LangGraph agent loop                     │
 └──────────────────────┬──────────────────────────────┘
                        │  tool calls
 ┌──────────────────────▼──────────────────────────────┐
-│  AI Agent  (graph/graph.py, graph/state.py)         │
+│  AI Agent  (backend/graph.py, backend/state.py)     │
 │  LangGraph graph with tool nodes                    │
 │  Tools:                                             │
 │    - lookup_team_stats(team_name) → dict             │
@@ -65,16 +65,23 @@ agentic-soccer/
 ├── requirements.txt                   # Python dependencies
 ├── docs/                              # documentations
 │   └── help.pdf                       # PAT 3.5 User Manual (CSP#/PCSP# reference)
-├── graph/                             # Flask backend + LangGraph agent
+├── backend/                           # Flask backend + LangGraph agent
 │   ├── app.py                         # Flask application, routes (/chat, /teams, etc.)
 │   ├── graph.py                       # LangGraph agent definition, tool bindings
 │   ├── main.py                        # Entry point (python main.py to start server)
 │   ├── state.py                       # LangGraph state schema
-│   └── soccer-chat/                   # Frontend client (React)
-│       ├── public/
-│       ├── src/
-│       ├── package.json
-│       └── ...
+│   └── Dockerfile
+│
+├── frontend/                          # Frontend client (React → nginx)
+│   ├── src/
+│   ├── package.json
+│   ├── nginx.conf
+│   ├── Dockerfile
+│   └── ...
+│
+├── redisserver/                       # Redis instance
+│   ├── Dockerfile
+│   └── entrypoint.sh
 │
 ├── tools/                             # Python tool implementations called by the agent
 │   ├── pat_runner.py                  # PAT wrapper: macro substitution + CLI execution + output parsing
