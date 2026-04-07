@@ -17,7 +17,12 @@ agentic-soccer/
 │   ├── graph.py                       # LangGraph agent definition, tool bindings
 │   ├── main.py                        # Entry point (python main.py to start server)
 │   ├── state.py                       # LangGraph state schema
-│   └── Dockerfile
+│   ├── Dockerfile
+│   ├── tools/                         # Python tool implementations called by the agent
+│   │   ├── pat_runner.py              # PAT wrapper: macro substitution + CLI execution + output parsing
+│   │   └── team_lookup.py             # Reads team_stats.csv to return a team's metrics as a dict
+│   └── model/                         # Python domain models
+│       └── team.py                    # Team class for abstraction over team stats
 │
 ├── frontend/                          # Frontend client (React → nginx)
 │   ├── src/
@@ -30,15 +35,9 @@ agentic-soccer/
 │   ├── Dockerfile
 │   └── entrypoint.sh
 │
-├── tools/                             # Python tool implementations called by the agent
-│   ├── pat_runner.py                  # PAT wrapper: macro substitution + CLI execution + output parsing
-│   └── team_lookup.py                 # Reads team_stats.csv to return a team's metrics as a dict
-│
-├── model/                             # PCSP# model and its documentation
+├── pcsp_model/                        # PCSP# model and its documentation
 │   ├── football_pressure.pcsp         # Parametric PCSP# template (agent edits #define lines)
-│   └── MODEL_SPEC.md                  # Documents every variable: what it means, which StatsBomb
-│                                      #   event type and attributes it is derived from, the formula,
-│                                      #   and how it maps to a #define macro in the PCSP file
+│   └── MODEL_SPEC.md                  # Documents every variable
 │
 ├── scripts/                           # Offline data processing (run once, or periodically)
 │   └── extract_team_stats.py          # Reads StatsBomb JSON → computes metrics → writes CSV
@@ -95,5 +94,5 @@ npm run start
   - PAT3 cli currently does not know how to handle relative path
 
 ```powershell
-pat -pcsp "$(Join-Path $PWD './model/football_pressure.pcsp')" "$(Join-Path $PWD './model/output.log')"
+pat -pcsp "$(Join-Path $PWD './pcsp_model/football_pressure.pcsp')" "$(Join-Path $PWD './pcsp_model/output.log')"
 ```

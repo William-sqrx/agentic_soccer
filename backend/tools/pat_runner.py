@@ -30,6 +30,16 @@ _OUTPUT_LOG = _PROJECT_ROOT / "pcsp_model" / "output.log"
 _PAT_DEFAULT_EXE = "PAT3.Console.exe"
 
 
+def _use_wine() -> bool:
+    """Return True if PAT must be invoked through Wine.
+
+    Controlled by the ``PAT_USE_WINE`` environment variable.
+    Set ``PAT_USE_WINE=1`` inside the Docker container where
+    Wine is available and PAT3.Console.exe cannot run natively.
+    """
+    return os.environ.get("PAT_USE_WINE", "").strip() == "1"
+
+
 def _resolve_pat_executable() -> str:
     """Return the path to the PAT executable.
 
@@ -112,6 +122,19 @@ def _substitute_macros(template: str, team_a: Team, team_b: Team) -> str:
     return result
 
 
+def _build_command(pat_exe: str, pcsp_path: str, output_log: str) -> list[str]:
+    """Build the subprocess command list for invoking PAT.
+
+    When ``PAT_USE_WINE=1`` the command is prefixed with ``wine`` so
+    the Windows executable runs under the Wine compatibility layer
+    inside the Docker container.
+    """
+    cmd = [pat_exe, "-pcsp", pcsp_path, output_log]
+    if _use_wine():
+        cmd = ["wine"] + cmd
+    return cmd
+
+
 def pat_runner(team_a: Team, team_b: Team) -> str:
     """Run PAT model checking with the given team parameters.
 
@@ -120,6 +143,8 @@ def pat_runner(team_a: Team, team_b: Team) -> str:
         2. Substitute ``#define`` macros with clamped team parameter values.
         3. Write the substituted model to a temporary ``.pcsp`` file.
         4. Invoke ``PAT3.Console.exe -pcsp <tmp_file> <output_log>`` via subprocess.
+           When running inside Docker (``PAT_USE_WINE=1``), the command is
+           prefixed with ``wine``.
         5. Read and return the verification output from the log file.
 
     Args:
@@ -151,11 +176,12 @@ def pat_runner(team_a: Team, team_b: Team) -> str:
         with os.fdopen(tmp_fd, "w", encoding="utf-8") as tmp_file:
             tmp_file.write(substituted)
 
-        # 4. Run PAT
+        # 4. Run PAT (via Wine inside Docker, natively on Windows)
         output_log = str(_OUTPUT_LOG)
-        print(f"Running: {pat_exe} -pcsp {tmp_path} {output_log}")
+        cmd = _build_command(pat_exe, tmp_path, output_log)
+        print(f"Running: {' '.join(cmd)}")
         subprocess.run(
-            [pat_exe, "-pcsp", tmp_path, output_log],
+            cmd,
             check=True,
             capture_output=True,
             text=True,
