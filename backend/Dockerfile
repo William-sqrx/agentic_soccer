@@ -25,7 +25,12 @@ RUN unzip /pat/MONO-PAT-v3.6.0.zip -d /pat \
 # ── Python dependencies ────────────────────────────────────────────────────
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# The base image ships urllib3, blinker, etc. via apt without pip RECORD
+# files, which prevents pip from upgrading them.  Wipe all system-managed
+# Python packages so pip can install clean copies of everything.
+RUN rm -rf /usr/lib/python3/dist-packages/* \
+    && python3.11 -m ensurepip --upgrade \
+    && pip install --no-cache-dir --break-system-packages -r requirements.txt
 
 # ── Application source ─────────────────────────────────────────────────────
 COPY app.py graph.py main.py state.py ./

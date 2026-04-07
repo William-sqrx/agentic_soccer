@@ -96,3 +96,14 @@ npm run start
 ```powershell
 pat -pcsp "$(Join-Path $PWD './pcsp_model/football_pressure.pcsp')" "$(Join-Path $PWD './pcsp_model/output.log')"
 ```
+
+## Development guide
+
+- run `docker compose up -d`
+
+- to have a terminal on the backend container, run
+
+```bash
+docker compose exec backend bash
+```
+
