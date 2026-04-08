@@ -1,7 +1,6 @@
 version: "3.9"
 
 services:
-
   redis:
     image: redis:alpine
     container_name: agentic_soccer_redis
@@ -35,7 +34,7 @@ services:
     build:
       context: ./frontend
     ports:
-      - "3000"
+      - "80"
     depends_on:
       - backend
     networks:
@@ -67,4 +66,3 @@ networks:
 volumes:
   redis_data:
     driver: local
-
