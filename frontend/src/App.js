@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const API_URL = "http://127.0.0.1:8000/chat";
+const API_URL = `${process.env.REACT_APP_API_URL}/chat`;
 
 const genId = () => Math.random().toString(36).slice(2, 9);
 const genUserId = () => "user-" + genId();
