@@ -64,37 +64,55 @@ def extract_chatstate(result):
 @app.route("/chat", methods=["POST"])
 async def chat():
     try:
+        print("chat: request received", flush=True)
         data = request.get_json()
+        print(f"chat: parsed json keys={list(data.keys()) if data else None}", flush=True)
+
         state, is_interrupt, config = get_state(data)
+        print(
+            f"chat: built state user_id={config['configurable']['user_id']} is_interrupt={is_interrupt}",
+            flush=True,
+        )
 
         if is_interrupt:
-            # previus interrupt will finish and update the state
+            print("chat: before graph.ainvoke interrupt resume", flush=True)
+            # previous interrupt will finish and update the state
             # Command() will pass chatstate and populate the state with user reply's react_state
             result = await graph.ainvoke(Command(resume=state), config)
+            print("chat: after graph.ainvoke interrupt resume", flush=True)
 
         else:
+            print("chat: before get_chat_state", flush=True)
             previous_state = get_chat_state(config["configurable"]["user_id"])
+            print("chat: after get_chat_state", flush=True)
+
             # Add system prompt from prompt_generator to maintain soccer coach context
             system_message = prompt_generator(ChatState(messages=[]))
+            print("chat: after prompt_generator", flush=True)
 
             # Include system messages at the start, followed by human messages
             messages = [system_message, *previous_state.messages, HumanMessage(content=state["evaluation"])]
+            print(f"chat: assembled messages count={len(messages)}", flush=True)
 
             updated_state = ChatState(messages=messages)
+            print("chat: before graph.ainvoke normal flow", flush=True)
             result = await graph.ainvoke(updated_state, config)
-
+            print("chat: after graph.ainvoke normal flow", flush=True)
 
         messages = extract_chatstate(result)
+        print(f"chat: extracted messages count={len(messages)}", flush=True)
 
         save_chat_state(config["configurable"]["user_id"], ChatState(messages=messages))
+        print("chat: after save_chat_state", flush=True)
 
         ai_messages = [m for m in messages if isinstance(m, AIMessage)]
+        print(f"chat: ai_messages count={len(ai_messages)}", flush=True)
 
         return jsonify({
             "response": ai_messages[-1].content,
         })
 
     except Exception as e:
-        print(f"Error in chat endpoint: {str(e)}")
-        print(traceback.format_exc())
+        print(f"Error in chat endpoint: {str(e)}", flush=True)
+        print(traceback.format_exc(), flush=True)
         return jsonify({"error": "Internal error", "details": str(e)}), 500
