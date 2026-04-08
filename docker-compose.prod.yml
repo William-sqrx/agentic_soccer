@@ -10,6 +10,8 @@ services:
     volumes:
       - redis_data:/data
     restart: unless-stopped
+    networks:
+      - internal
 
   backend:
     build:
@@ -24,6 +26,7 @@ services:
     expose:
       - "8000"
     networks:
+      - internal
       - traefik
     labels:
       - "traefik.enable=true"
@@ -91,6 +94,8 @@ services:
 networks:
   traefik:
     external: true
+  internal:
+    driver: bridge
 
 volumes:
   redis_data:
