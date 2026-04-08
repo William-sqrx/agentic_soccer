@@ -13,6 +13,9 @@ from typing import Callable
 from openai import APIConnectionError
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from tools.pat_runner import pat_runner
+from tools.team_lookup import team_lookup
+from model.team import Team
 
 
 load_dotenv()
@@ -20,24 +23,21 @@ load_dotenv()
 # ─── 1. Define the weather tool ───────────────────────────────────────────────
 
 @tool
-def get_weather(location: str) -> str:
-    """Look up the current weather for a given location.
+def run_pat_analysis(
+    team_a_name: str,
+    team_b_name: str,
+) -> str:
+    """Run PAT model checking to analyse pressure dynamics between two football teams.
 
     Args:
-        location: The city or place to get the weather for, e.g. 'Singapore'.
+        team_a_name: The name of the team whose pressure aggression is being analysed.
+        team_b_name: The name of the opponent team.
     """
-    # Replace this stub with a real API call (e.g. OpenWeatherMap) as needed.
-    location_lower = location.lower()
-    if "singapore" in location_lower:
-        return "It's 32°C and humid with partly cloudy skies in Singapore."
-    elif "london" in location_lower:
-        return "It's 14°C and overcast in London."
-    elif "new york" in location_lower:
-        return "It's 22°C and sunny in New York."
-    else:
-        return f"Weather data for '{location}' is not available right now."
+    team_a = team_lookup(team_a_name)
+    team_b = team_lookup(team_b_name)
+    return pat_runner(team_a, team_b)
 
-tools = [get_weather]
+tools = [run_pat_analysis]
 
 # ─── 2. Bind tools to the model ───────────────────────────────────────────────
 
@@ -49,11 +49,14 @@ MODEL = ChatOpenAI(
 # ─── 3. Prompt & invokeAI (unchanged, just uses the tool-aware MODEL) ─────────
 
 def prompt_generator(state: ChatState, **kwargs) -> SystemMessage:
-    last_user = next(
-        (m.content for m in reversed(state.messages) if isinstance(m, HumanMessage)),
-        ""
-    )
-    return SystemMessage(content=f"You are a helpful AI. The user said: {last_user}")
+    return SystemMessage(content="""You are an AI football tactics coach that uses formal probabilistic model checking (PAT) to give precise, data-backed tactical advice.
+
+When a user asks about pressing tactics or how aggressively a team should press:
+1. Call run_pat_analysis multiple times with pressure_aggression_a values of 20, 40, 60, and 80
+2. Compare the win probabilities returned from each run
+3. Recommend the aggression level with the highest win probability, citing the exact numbers
+
+NEVER give generic advice. ALWAYS call run_pat_analysis first.""")
 
 async def invokeAI(
     system_prompt_fn: Callable,
