@@ -305,8 +305,8 @@ async def reply_node(state: ChatState) -> dict:
 
     # Build prompt from current state + optional new human message
     prompt_messages = state.messages + ([new_human] if new_human else [])
-    system = SystemMessage(content="You are a helpful AI.")
-    reply = await MODEL.ainvoke([system, *prompt_messages[-3:]])
+    system = prompt_generator(ChatState(messages=[]))
+    reply = await MODEL.ainvoke([system, *prompt_messages])
     print("reply is", reply)
 
     return {
