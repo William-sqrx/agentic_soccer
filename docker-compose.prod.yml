@@ -46,7 +46,7 @@ services:
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
 
   traefik:
-    image: "traefik:v2.8"
+    image: "traefik:v3.6"
     command:
       - "--api.insecure=true"
       - "--providers.docker"
