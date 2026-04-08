@@ -1,7 +1,7 @@
 # ── Backend – Flask + LangGraph agent + Wine (for PAT3.Console.exe) ────────
 #
 # Based on docker-wine so the Python backend can invoke PAT3 via Wine.
-FROM scottyhardy/docker-wine:latest
+FROM scottyhardy/docker-wine:devel-11.6-20260405
 
 # ── Install Python 3.11 via deadsnakes PPA ─────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
