@@ -4,7 +4,7 @@ import redis, pickle
 import traceback
 import json
 from flask import Flask, jsonify, request
-from graph import graph as graph
+from graph import graph as graph, prompt_generator
 from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.types import Command
 from state import ChatState
@@ -74,8 +74,12 @@ async def chat():
 
         else:
             previous_state = get_chat_state(config["configurable"]["user_id"])
-            # for getting started
-            messages = [*previous_state.messages, HumanMessage(content=state["evaluation"])]
+            # Add system prompt from prompt_generator to maintain soccer coach context
+            system_message = prompt_generator(ChatState(messages=[]))
+
+            # Include system messages at the start, followed by human messages
+            messages = [system_message, *previous_state.messages, HumanMessage(content=state["evaluation"])]
+
             updated_state = ChatState(messages=messages)
             result = await graph.ainvoke(updated_state, config)
 
