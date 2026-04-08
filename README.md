@@ -100,27 +100,33 @@ pat -pcsp "$(Join-Path $PWD './pcsp_model/football_pressure.pcsp')" "$(Join-Path
 ## Development guide
 
 ### Local Development with Docker Compose
+
 - To start services locally for development:
+
 ```bash
-docker-compose up
+docker compose up
 ```
 
 - To enable live updates to code (e.g., for the backend):
+
 ```bash
-docker-compose up -f docker-compose.override.yml
+docker compose up -f docker-compose.override.yml
 ```
 
 ### Production Deployment
+
 For deployment on EC2 or a similar environment:
+
 1. Use `docker-compose.prod.yml` with the following command:
+
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up --build
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
 ```
-2. Ensure Traefik and HTTPS configurations are set correctly.
+
+1. Ensure Traefik and HTTPS configurations are set correctly.
 
 - to have a terminal on the backend container, run
 
 ```bash
 docker compose exec backend bash
 ```
-
