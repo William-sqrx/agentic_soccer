@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  backend:
+    volumes:
+      - ./backend/tools:/app/tools
+      - ./backend/model:/app/model
+      - ./pcsp_model:/app/pcsp_model:ro
+      - ./data/processed:/app/data/processed:ro
+
+  frontend:
+    build:
+      args:
+        REACT_APP_API_URL: http://localhost:8000
+
