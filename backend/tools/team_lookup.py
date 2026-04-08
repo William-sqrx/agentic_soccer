@@ -58,3 +58,27 @@ def team_lookup(team_name: str) -> Team:
         f"Team '{team_name}' not found in {_CSV_PATH.name}.  "
         "Check spelling or run the extraction script with updated data."
     )
+
+def get_team_names() -> list[str]:
+    """Retrieve all team names from the precomputed CSV.
+
+    Returns:
+        A list of team names (strings) from the CSV's first column.
+
+    Raises:
+        FileNotFoundError: If the CSV file does not exist.
+    """
+    if not _CSV_PATH.exists():
+        raise FileNotFoundError(
+            f"Team stats CSV not found at {_CSV_PATH}.  "
+            "Run scripts/extract_team_stats.py first."
+        )
+
+    team_names: list[str] = []
+    with _CSV_PATH.open("r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            team_names.append(row["team"].strip())
+
+    return team_names
+

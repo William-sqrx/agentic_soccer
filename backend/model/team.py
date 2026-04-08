@@ -18,3 +18,15 @@ class Team:
         self.pressure_success = pressure_success
         self.pressure_aggression = pressure_aggression
         return
+
+    def toDict(self):
+        return {
+            "pass_reliability": self.pass_reliability,
+            "pass_under_pressure": self.pass_under_pressure,
+            "shot_conversion": self.shot_conversion,
+            "xg_per_shot": self.xg_per_shot,
+            "ball_retention": self.ball_retention,
+            "pressure_success": self.pressure_success,
+            "pressure_aggression": self.pressure_aggression,
+        }
+
