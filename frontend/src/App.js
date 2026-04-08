@@ -15,7 +15,119 @@ const formatTime = (iso) => {
     return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 };
+const MarkdownContent = ({ content }) => {
+  const escape = (s) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+  const parseInline = (text) =>
+    text
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>")
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>")
+      .replace(/~~(.+?)~~/g, "<del>$1</del>")
+      .replace(
+        /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
+      );
+
+  const parseMarkdown = (raw) => {
+    const lines = raw.split("\n");
+    const html = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+
+      // Fenced code block
+      if (line.startsWith("```")) {
+        const lang = line.slice(3).trim();
+        const codeLines = [];
+        i++;
+        while (i < lines.length && !lines[i].startsWith("```")) {
+          codeLines.push(escape(lines[i]));
+          i++;
+        }
+        html.push(
+          `<pre data-lang="${lang}"><code>${codeLines.join("\n")}</code></pre>`,
+        );
+        i++;
+        continue;
+      }
+
+      // Headings
+      const h = line.match(/^(#{1,6})\s+(.+)/);
+      if (h) {
+        const level = h[1].length;
+        html.push(`<h${level}>${parseInline(h[2])}</h${level}>`);
+        i++;
+        continue;
+      }
+
+      // Horizontal rule
+      if (/^[-*_]{3,}$/.test(line.trim())) {
+        html.push("<hr/>");
+        i++;
+        continue;
+      }
+
+      // Blockquote
+      if (line.startsWith("> ")) {
+        const quoteLines = [];
+        while (i < lines.length && lines[i].startsWith("> ")) {
+          quoteLines.push(parseInline(lines[i].slice(2)));
+          i++;
+        }
+        html.push(`<blockquote>${quoteLines.join("<br/>")}</blockquote>`);
+        continue;
+      }
+
+      // Unordered list
+      if (/^[-*+]\s/.test(line)) {
+        const items = [];
+        while (i < lines.length && /^[-*+]\s/.test(lines[i])) {
+          items.push(`<li>${parseInline(lines[i].slice(2))}</li>`);
+          i++;
+        }
+        html.push(`<ul>${items.join("")}</ul>`);
+        continue;
+      }
+
+      // Ordered list
+      if (/^\d+\.\s/.test(line)) {
+        const items = [];
+        while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
+          items.push(
+            `<li>${parseInline(lines[i].replace(/^\d+\.\s/, ""))}</li>`,
+          );
+          i++;
+        }
+        html.push(`<ol>${items.join("")}</ol>`);
+        continue;
+      }
+
+      // Blank line
+      if (line.trim() === "") {
+        html.push("<br/>");
+        i++;
+        continue;
+      }
+
+      // Paragraph
+      html.push(`<p>${parseInline(line)}</p>`);
+      i++;
+    }
+
+    return html.join("");
+  };
+
+  return (
+    <div
+      className="md-content"
+      dangerouslySetInnerHTML={{ __html: parseMarkdown(content) }}
+    />
+  );
+};
 const FieldIcon = ({ size = 16 }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
     <rect
@@ -537,7 +649,13 @@ export default function App() {
                   ...(m.role === "user" ? s.userBubble : s.aiBubble),
                 }}
               >
-                <div style={s.bubbleContent}>{m.content}</div>
+                <div style={s.bubbleContent}>
+                  {m.role === "ai" ? (
+                    <MarkdownContent content={m.content} />
+                  ) : (
+                    m.content
+                  )}
+                </div>
                 <div style={s.bubbleTime}>{formatTime(m.ts)}</div>
               </div>
             </div>
@@ -926,4 +1044,42 @@ const css = `
   .chat-textarea::placeholder { color: #2a4a2a; }
   .chat-textarea:focus { outline: none; }
   .input-box-focused { border-color: #16a34a66 !important; }
+  .md-content p { margin: 0 0 6px; line-height: 1.65; }
+.md-content p:last-child { margin-bottom: 0; }
+.md-content h1,.md-content h2,.md-content h3,.md-content h4 { 
+  color: #86efac; font-weight: 600; margin: 10px 0 4px; line-height: 1.3; 
+}
+.md-content h1 { font-size: 16px; }
+.md-content h2 { font-size: 15px; }
+.md-content h3 { font-size: 14px; }
+.md-content strong { color: #a3e6b0; font-weight: 600; }
+.md-content em { font-style: italic; color: #c4e8c4; }
+.md-content del { text-decoration: line-through; opacity: 0.6; }
+.md-content code { 
+  background: #0a150a; border: 1px solid #1e341e; border-radius: 4px; 
+  padding: 1px 5px; font-family: 'Geist Mono', monospace; font-size: 12.5px; color: #4ade80; 
+}
+.md-content pre { 
+  background: #0a150a; border: 1px solid #1e341e; border-radius: 8px; 
+  padding: 12px 14px; overflow-x: auto; margin: 8px 0; position: relative; 
+}
+.md-content pre code { 
+  background: none; border: none; padding: 0; font-size: 12.5px; 
+  color: #86efac; line-height: 1.6; display: block; 
+}
+.md-content pre[data-lang]:not([data-lang=""])::before { 
+  content: attr(data-lang); position: absolute; top: 7px; right: 10px; 
+  font-size: 10px; color: #3a6a3a; font-family: monospace; text-transform: uppercase; 
+}
+.md-content ul,.md-content ol { padding-left: 18px; margin: 4px 0 8px; }
+.md-content li { margin: 3px 0; line-height: 1.6; }
+.md-content ul li { list-style: none; padding-left: 4px; }
+.md-content ul li::before { content: "▸"; margin-right: 6px; color: #16a34a; font-size: 10px; }
+.md-content blockquote { 
+  border-left: 3px solid #16a34a; padding: 4px 10px; margin: 6px 0; 
+  background: #0a150a; border-radius: 0 6px 6px 0; color: #7ab87a; font-style: italic; 
+}
+.md-content hr { border: none; border-top: 1px solid #1e341e; margin: 10px 0; }
+.md-content a { color: #4ade80; text-decoration: underline; text-underline-offset: 2px; }
+.md-content a:hover { color: #86efac; }
 `;
