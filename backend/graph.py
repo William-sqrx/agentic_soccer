@@ -187,6 +187,7 @@ def find_optimal_aggression(
 
     for i in range(10, 100, 10):
         result += "Pressure aggression of team A set to i\n\n"
+        team_a.pressure_aggression = i
         result += pat_runner(team_a, team_b)
 
 
