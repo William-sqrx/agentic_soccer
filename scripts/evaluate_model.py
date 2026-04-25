@@ -46,30 +46,51 @@ MATCHES_DIR = ROOT / "data" / "open-data" / "data" / "matches"
 TEAMS_CSV = ROOT / "data" / "processed" / "team_stats.csv"
 PREDICTIONS_CSV = ROOT / "scripts" / "eval_predictions.csv"
 
-# Captures one PAT assertion block: assertion name + the [pmin, pmax] interval
-# from its Verification Result. Non-greedy .*? with DOTALL hops over the
-# intervening "Verification Result" header and settings.
-_RESULT_RE = re.compile(
+# PAT prints "is NOT valid" (without a Probability line) when reachability
+# probability is exactly 0 — we treat that as p=0.0. We split the output into
+# per-assertion blocks so the prob regex cannot cross assertion boundaries.
+_ASSERTION_HEADER_RE = re.compile(
     r"Assertion: Match\(\) reaches (TeamAWins|TeamBWins|Draw) with prob"
-    r".*?Probability \[([\d.]+),\s*([\d.]+)\]",
-    re.DOTALL,
 )
+_PROB_RE = re.compile(r"Probability \[([\d.]+),\s*([\d.]+)\]")
+_NOT_VALID_RE = re.compile(r"is NOT valid")
 
 
 def parse_pat_output(output: str) -> dict[str, float]:
     """Extract {p_a_win, p_b_win, p_draw} from PAT verification output."""
+    headers = [
+        (m.group(1), m.start()) for m in _ASSERTION_HEADER_RE.finditer(output)
+    ]
+    if len(headers) != 3:
+        raise ValueError(
+            f"Expected 3 PAT assertions, found {len(headers)}: "
+            f"{[h for h, _ in headers]}"
+        )
     probs: dict[str, float] = {}
-    for m in _RESULT_RE.finditer(output):
-        name, low, _high = m.group(1), float(m.group(2)), float(m.group(3))
-        probs[name] = low
-    missing = {"TeamAWins", "TeamBWins", "Draw"} - probs.keys()
-    if missing:
-        raise ValueError(f"Missing PAT assertions in output: {sorted(missing)}")
+    for i, (name, start) in enumerate(headers):
+        end = headers[i + 1][1] if i + 1 < len(headers) else len(output)
+        block = output[start:end]
+        m_prob = _PROB_RE.search(block)
+        if m_prob:
+            probs[name] = float(m_prob.group(1))
+        elif _NOT_VALID_RE.search(block):
+            probs[name] = 0.0
+        else:
+            raise ValueError(f"Cannot parse {name} block: {block[:200]!r}")
     return {
         "p_a_win": probs["TeamAWins"],
         "p_b_win": probs["TeamBWins"],
         "p_draw": probs["Draw"],
     }
+
+
+def load_existing_predictions() -> tuple[list[dict], set[int]]:
+    """Load already-evaluated rows from PREDICTIONS_CSV (empty if file missing)."""
+    if not PREDICTIONS_CSV.exists():
+        return [], set()
+    with PREDICTIONS_CSV.open("r", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    return rows, {int(r["match_id"]) for r in rows}
 
 
 def load_known_teams() -> set[str]:
@@ -110,7 +131,7 @@ def argmax_correct(
     return pred_idx == actual_idx
 
 
-def evaluate(limit: int | None) -> None:
+def evaluate(limit: int | None, resume: bool) -> None:
     known = load_known_teams()
     all_matches = list_all_matches()
     eligible = [
@@ -123,6 +144,14 @@ def evaluate(limit: int | None) -> None:
         f"both teams in CSV: {len(eligible)} | "
         f"teams in CSV: {len(known)}"
     )
+
+    existing_rows: list[dict] = []
+    done_ids: set[int] = set()
+    if resume:
+        existing_rows, done_ids = load_existing_predictions()
+        eligible = [m for m in eligible if m["match_id"] not in done_ids]
+        print(f"--resume: {len(done_ids)} matches already in CSV; "
+              f"{len(eligible)} new to evaluate")
 
     if limit is not None:
         eligible = eligible[:limit]
@@ -184,22 +213,31 @@ def evaluate(limit: int | None) -> None:
                 f"({elapsed:.0f}s, {elapsed / max(i, 1):.1f}s/match)"
             )
 
-    if not n_evaluated:
+    combined = existing_rows + rows
+    if not combined:
         print("No matches evaluated — check that PAT_PATH is set and PAT runs.")
         return
 
     PREDICTIONS_CSV.parent.mkdir(parents=True, exist_ok=True)
     with PREDICTIONS_CSV.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=rows[0].keys())
+        writer = csv.DictWriter(f, fieldnames=combined[0].keys())
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(combined)
+
+    # Recompute summary across the full combined CSV (existing + newly added)
+    total_correct = sum(int(r["correct"]) for r in combined)
+    total_brier = sum(float(r["brier"]) for r in combined)
+    total = len(combined)
 
     print()
     print("=" * 60)
-    print(f"Matches evaluated:  {n_evaluated}")
-    print(f"Argmax accuracy:    {n_correct / n_evaluated:.4f}  "
-          f"({n_correct}/{n_evaluated})")
-    print(f"Mean Brier score:   {sum_brier / n_evaluated:.4f}  "
+    if existing_rows:
+        print(f"Newly evaluated:    {n_evaluated}  "
+              f"(existing rows reused: {len(existing_rows)})")
+    print(f"Matches in CSV:     {total}")
+    print(f"Argmax accuracy:    {total_correct / total:.4f}  "
+          f"({total_correct}/{total})")
+    print(f"Mean Brier score:   {total_brier / total:.4f}  "
           "(0 = perfect, ~0.67 = uniform 1/3 each, 2 = worst)")
     print(f"Predictions saved:  {PREDICTIONS_CSV}")
 
@@ -210,8 +248,12 @@ def main() -> None:
         "--limit", type=int, default=None,
         help="Cap matches evaluated (for quick smoke testing).",
     )
+    parser.add_argument(
+        "--resume", action="store_true",
+        help="Skip matches already in eval_predictions.csv and append new ones.",
+    )
     args = parser.parse_args()
-    evaluate(limit=args.limit)
+    evaluate(limit=args.limit, resume=args.resume)
 
 
 if __name__ == "__main__":
