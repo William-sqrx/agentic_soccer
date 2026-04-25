@@ -96,9 +96,13 @@ agentic-soccer/
 │                                      #   event type and attributes it is derived from, the formula,
 │                                      #   and how it maps to a #define macro in the PCSP file
 │
-├── scripts/                           # Offline data processing (run once, or periodically)
+├── scripts/                           # Offline data processing & model evaluation
 │   ├── extract_team_stats.py          # Reads StatsBomb JSON → computes metrics → writes CSV
-│   └── validate_stats.py             # (Optional) sanity-checks the computed CSV values
+│   ├── validate_stats.py              # (Optional) sanity-checks the computed CSV values
+│   ├── evaluate_model.py              # Runs PAT on every eligible match, writes eval_predictions.csv
+│   ├── evaluate_baseline.py           # Always-home-win baseline, writes baseline_predictions.csv
+│   ├── eval_predictions.csv           # PAT model per-match predictions + Brier (output)
+│   └── baseline_predictions.csv       # Baseline per-match predictions + Brier (output)
 │
 └─── data/                              # All data assets
       ├── open-data/                     # Full clone of https://github.com/statsbomb/open-data
@@ -122,6 +126,9 @@ agentic-soccer/
 ### Key points
 
 - **`scripts/`** is for offline batch processing. Run `python scripts/extract_team_stats.py --repo_path data/open-data --output data/processed/team_stats.csv` once (or whenever new matches are added to open-data). The agent never runs these scripts at query time — it reads the precomputed CSV.
+- **Model evaluation** (also under `scripts/`):
+  - `evaluate_model.py` runs PAT on every match in `data/open-data` whose teams both appear in `team_stats.csv`, parses the three reachability probabilities, and writes per-match predictions + Brier score to `scripts/eval_predictions.csv`. Requires `PAT_PATH` env var pointing at `PAT3.Console.exe`. Supports `--limit N` for fast iteration.
+  - `evaluate_baseline.py` produces a parallel `scripts/baseline_predictions.csv` using the trivial "always predict home win" baseline. Same schema as the model output, so the two CSVs are directly comparable for accuracy and Brier.
 - **`tools/`** contains the agent-callable tools. These are thin wrappers: `pat_runner.py` does macro substitution and subprocess invocation; `team_lookup.py` does a CSV lookup.
 - **`model/`** holds Python domain models. `team.py` contains the `Team` class for abstracting over team statistics.
 - **`pcsp_model/`** holds the PCSP# template and its specification document. `MODEL_SPEC.md` is the authoritative reference for what each `#define` macro means, how it is calculated, and which StatsBomb event types feed into it. If you change the model, update `MODEL_SPEC.md` in the same commit.

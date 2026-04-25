@@ -39,8 +39,12 @@ agentic-soccer/
 │   ├── football_pressure.pcsp         # Parametric PCSP# template (agent edits #define lines)
 │   └── MODEL_SPEC.md                  # Documents every variable
 │
-├── scripts/                           # Offline data processing (run once, or periodically)
-│   └── extract_team_stats.py          # Reads StatsBomb JSON → computes metrics → writes CSV
+├── scripts/                           # Offline data processing & model evaluation
+│   ├── extract_team_stats.py          # Reads StatsBomb JSON → computes metrics → writes CSV
+│   ├── evaluate_model.py              # Runs PAT on every eligible match, writes eval_predictions.csv
+│   ├── evaluate_baseline.py           # Always-home-win baseline, writes baseline_predictions.csv
+│   ├── eval_predictions.csv           # PAT model per-match predictions + Brier (output)
+│   └── baseline_predictions.csv       # Baseline per-match predictions + Brier (output)
 │
 │
 └─── data/                              # All data assets
@@ -86,6 +90,23 @@ Start the frontend
 cd frontend
 npm run start
 ```
+
+## Evaluating the PAT model
+
+Two scripts produce parallel per-match prediction CSVs that can be compared directly (same schema, same row order).
+
+```powershell
+$env:PAT_PATH = 'C:\Program Files\Process Analysis Toolkit\Process Analysis Toolkit 3.5.1\PAT3.Console.exe'
+
+# PAT model — runs PAT once per eligible match (~1.5 s/match, ~90 min for full open-data)
+python scripts/evaluate_model.py --limit 50    # quick smoke
+python scripts/evaluate_model.py               # full run -> scripts/eval_predictions.csv
+
+# Always-predict-home-win baseline — instant, no PAT required
+python scripts/evaluate_baseline.py            # -> scripts/baseline_predictions.csv
+```
+
+Each row contains the predicted (p_home_win, p_draw, p_home_loss), the one-hot actual outcome, the Brier score for that match, and a 0/1 argmax-correctness flag. Each script prints overall accuracy and mean Brier on stdout when it finishes.
 
 ## Notes on running pat locally in Windows
 
